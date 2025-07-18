@@ -22,20 +22,21 @@ This project leverages a **Convolutional Neural Network (CNN)** to classify pota
 potato-disease-classifier/
 │
 ├── api/
-│ ├── main.py # FastAPI app
+│ └── main.py # FastAPI app (handles image uploads & prediction)
 │
 ├── frontend/
 │ ├── src/
 │ │ ├── components/
-│ │ │ └── Upload.tsx # Image upload and preview
-| | | ---Functionalities/ ApiService.ts// Handle Api     
-│ │ └── App.tsx # Main app
-│ └── package.json
+│ │ │ └── Upload.tsx # Component to upload & preview images
+│ │ │ └── Functionalities/
+│ │ │ └── ApiService.ts # Handles API calls to FastAPI backend
+│ │ └── App.tsx # Entry point for React app
+│ └── package.json # Frontend dependencies
 │
 ├── model_training/
-│ ├── train.py # CNN training script
-│ ├── dataset/ # Raw dataset (Potato leaf images)
-│ └── model.h5 # Trained model
+│ ├── train.py # CNN model training script
+│ ├── dataset/ # Directory with raw potato leaf images
+│ └── model.h5 # Trained CNN model (Keras format)
 
 
 ---
