@@ -1,5 +1,5 @@
 import React from 'react';
-import PotatoDiseaseUpload from './components/new_upload';
+import PotatoDiseaseUpload from './components/Upload';
 
 const App: React.FC = () => {
   return (
