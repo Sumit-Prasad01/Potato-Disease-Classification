@@ -19,6 +19,7 @@ This project leverages a **Convolutional Neural Network (CNN)** to classify pota
 
 ## 📁 Project Structure
 
+```
 potato-disease-classifier/
 │
 ├── api/
@@ -37,7 +38,7 @@ potato-disease-classifier/
 │ ├── train.py # CNN model training script
 │ ├── dataset/ # Directory with raw potato leaf images
 │ └── model.h5 # Trained CNN model (Keras format)
-
+```
 
 ---
 
