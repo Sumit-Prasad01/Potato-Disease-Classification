@@ -1,12 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import { Upload, X, AlertCircle, CheckCircle } from 'lucide-react';
+import { Upload, X, AlertCircle, CheckCircle, Brain, Loader2 } from 'lucide-react';
+import { apiService } from '../Functionality/ApiService'
+import { formatConfidence, getConfidenceColor, getDiseaseDisplayName } from '../Functionality/ApiService';
+import type { UploadedFile, PredictionResponse } from '../Functionality/ApiService';
 
-interface UploadedFile {
-  id: string;
-  file: File;
-  preview: string;
-  status: 'uploading' | 'success' | 'error';
-}
+
 
 const PotatoDiseaseUpload: React.FC = () => {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -44,7 +42,8 @@ const PotatoDiseaseUpload: React.FC = () => {
         id,
         file,
         preview,
-        status: 'uploading'
+        status: 'uploading',
+        predictionStatus: 'idle'
       };
 
       setUploadedFiles(prev => [...prev, newFile]);
@@ -86,10 +85,54 @@ const PotatoDiseaseUpload: React.FC = () => {
     });
   }, []);
 
+  const predictImage = useCallback(async (id: string) => {
+    const file = uploadedFiles.find(f => f.id === id);
+    if (!file) return;
+
+    // Update status to predicting
+    setUploadedFiles(prev => 
+      prev.map(f => 
+        f.id === id ? { ...f, predictionStatus: 'predicting' } : f
+      )
+    );
+
+    try {
+      const prediction = await apiService.predictDisease(file.file);
+      
+      setUploadedFiles(prev => 
+        prev.map(f => 
+          f.id === id ? { 
+            ...f, 
+            predictionStatus: 'predicted',
+            prediction: prediction
+          } : f
+        )
+      );
+    } catch (error) {
+      setUploadedFiles(prev => 
+        prev.map(f => 
+          f.id === id ? { 
+            ...f, 
+            predictionStatus: 'prediction_error',
+            predictionError: error instanceof Error ? error.message : 'Prediction failed'
+          } : f
+        )
+      );
+    }
+  }, [uploadedFiles]);
+
   const clearAll = useCallback(() => {
     uploadedFiles.forEach(file => URL.revokeObjectURL(file.preview));
     setUploadedFiles([]);
   }, [uploadedFiles]);
+
+  const predictAllImages = useCallback(async () => {
+    const successfulFiles = uploadedFiles.filter(f => f.status === 'success' && f.predictionStatus === 'idle');
+    
+    for (const file of successfulFiles) {
+      await predictImage(file.id);
+    }
+  }, [uploadedFiles, predictImage]);
 
   return (
     <div className="min-h-screen min-w-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
@@ -170,12 +213,23 @@ const PotatoDiseaseUpload: React.FC = () => {
               <h3 className="text-xl font-semibold text-white">
                 Uploaded Images ({uploadedFiles.length})
               </h3>
-              <button
-                onClick={clearAll}
-                className="px-4 py-2 text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg transition-colors"
-              >
-                Clear All
-              </button>
+              <div className="flex space-x-2">
+                {uploadedFiles.some(f => f.status === 'success' && f.predictionStatus === 'idle') && (
+                  <button
+                    onClick={predictAllImages}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center space-x-2"
+                  >
+                    <Brain className="w-4 h-4" />
+                    <span>Predict All</span>
+                  </button>
+                )}
+                <button
+                  onClick={clearAll}
+                  className="px-4 py-2 text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg transition-colors"
+                >
+                  Clear All
+                </button>
+              </div>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -217,7 +271,7 @@ const PotatoDiseaseUpload: React.FC = () => {
                         {file.status === 'success' && (
                           <>
                             <CheckCircle className="w-4 h-4 text-green-400" />
-                            <span className="text-xs text-green-400">Success</span>
+                            <span className="text-xs text-green-400">Uploaded</span>
                           </>
                         )}
                         {file.status === 'error' && (
@@ -228,6 +282,61 @@ const PotatoDiseaseUpload: React.FC = () => {
                         )}
                       </div>
                     </div>
+
+                    {/* Prediction Section */}
+                    {file.status === 'success' && (
+                      <div className="mt-3 pt-3 border-t border-slate-600/50">
+                        {file.predictionStatus === 'idle' && (
+                          <button
+                            onClick={() => predictImage(file.id)}
+                            className="w-full px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                          >
+                            <Brain className="w-4 h-4" />
+                            <span>Predict Disease</span>
+                          </button>
+                        )}
+                        
+                        {file.predictionStatus === 'predicting' && (
+                          <div className="flex items-center justify-center space-x-2 text-blue-400">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span className="text-sm">Analyzing...</span>
+                          </div>
+                        )}
+                        
+                        {file.predictionStatus === 'predicted' && file.prediction && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-white">Disease:</span>
+                              <span className="text-sm text-slate-300">
+                                {getDiseaseDisplayName(file.prediction.class)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-white">Confidence:</span>
+                              <span className={`text-sm font-medium ${getConfidenceColor(file.prediction.confidence)}`}>
+                                {formatConfidence(file.prediction.confidence)}
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-600 rounded-full h-2">
+                              <div 
+                                className={`h-2 rounded-full transition-all duration-500 ${
+                                  file.prediction.confidence >= 0.8 ? 'bg-green-500' :
+                                  file.prediction.confidence >= 0.6 ? 'bg-yellow-500' : 'bg-red-500'
+                                }`}
+                                style={{ width: `${file.prediction.confidence * 100}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {file.predictionStatus === 'prediction_error' && (
+                          <div className="flex items-center space-x-2 text-red-400">
+                            <AlertCircle className="w-4 h-4" />
+                            <span className="text-sm">{file.predictionError || 'Prediction failed'}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -235,27 +344,39 @@ const PotatoDiseaseUpload: React.FC = () => {
           </div>
         )}
 
-        {/* Classification Results */}
-        {uploadedFiles.filter(f => f.status === 'success').length > 0 && (
+        {/* Classification Results Summary */}
+        {uploadedFiles.filter(f => f.predictionStatus === 'predicted').length > 0 && (
           <div className="mt-8 bg-slate-800/30 backdrop-blur-sm rounded-xl p-6">
-            <h3 className="text-xl font-semibold text-white mb-4">Classification Results</h3>
-            <div className="space-y-3">
-              {uploadedFiles.filter(f => f.status === 'success').map((file) => (
-                <div key={file.id} className="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <img
-                      src={file.preview}
-                      alt={file.file.name}
-                      className="w-12 h-12 rounded-lg object-cover"
-                    />
-                    <div>
-                      <p className="font-medium text-white">{file.file.name}</p>
-                      <p className="text-sm text-slate-400">Ready for classification</p>
-                    </div>
+            <h3 className="text-xl font-semibold text-white mb-4">Classification Summary</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {uploadedFiles.filter(f => f.predictionStatus === 'predicted').map((file) => (
+                <div key={file.id} className="flex items-center space-x-4 p-4 bg-slate-700/30 rounded-lg">
+                  <img
+                    src={file.preview}
+                    alt={file.file.name}
+                    className="w-16 h-16 rounded-lg object-cover"
+                  />
+                  <div className="flex-1">
+                    <p className="font-medium text-white truncate">{file.file.name}</p>
+                    <p className="text-sm text-slate-300 mt-1">
+                      {file.prediction && getDiseaseDisplayName(file.prediction.class)}
+                    </p>
+                    <p className={`text-sm font-medium mt-1 ${
+                      file.prediction && getConfidenceColor(file.prediction.confidence)
+                    }`}>
+                      {file.prediction && formatConfidence(file.prediction.confidence)} confidence
+                    </p>
                   </div>
-                  <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
-                    Classify
-                  </button>
+                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    file.prediction && file.prediction.confidence >= 0.8 
+                      ? 'bg-green-500/20 text-green-400' 
+                      : file.prediction && file.prediction.confidence >= 0.6 
+                        ? 'bg-yellow-500/20 text-yellow-400' 
+                        : 'bg-red-500/20 text-red-400'
+                  }`}>
+                    {file.prediction && file.prediction.confidence >= 0.8 ? 'High' : 
+                     file.prediction && file.prediction.confidence >= 0.6 ? 'Medium' : 'Low'}
+                  </div>
                 </div>
               ))}
             </div>

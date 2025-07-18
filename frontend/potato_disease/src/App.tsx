@@ -1,9 +1,11 @@
-import Upload from './components/Upload';
-const App = () => {
+import React from 'react';
+import PotatoDiseaseUpload from './components/new_upload';
+
+const App: React.FC = () => {
   return (
-    <>
-    <Upload/>
-    </>
+    <main className="min-h-screen">
+      <PotatoDiseaseUpload />
+    </main>
   );
 };
 
